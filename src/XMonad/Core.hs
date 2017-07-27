@@ -20,7 +20,7 @@ module XMonad.Core (
     X, WindowSet, WindowSpace, WorkspaceId,
     ScreenId(..), ScreenDetail(..), XState(..),
     XConf(..), XConfig(..), LayoutClass(..),
-    Layout(..), readsLayout, Typeable, Message,
+    Layout(..), handleReloadTy, handleReloadS, readsLayout, Typeable, Message,
     SomeMessage(..), fromMessage, LayoutMessages(..),
     StateExtension(..), ExtensionClass(..),
     runX, catchX, userCode, userCodeDef, io, catchIO, installSignalHandlers, uninstallSignalHandlers,
@@ -328,12 +328,33 @@ class Show (layout a) => LayoutClass layout a where
     description :: layout a -> String
     description      = show
 
+    -- | @handleReload old newDef@. When the xmonad config is reloaded, create
+    -- the new layout from the state of the old and the config of the new, if
+    -- possible. Layouts without static internal config (e.g. colors) can use
+    -- the default implementation (@handleReload = const@), layout modifiers
+    -- should relay this to their inner layout. See also `handleReload'`.
+    handleReload :: layout a -> layout a -> layout a
+    handleReload = const
+
+-- | `handleReload` wrapper that deals with changing layout types. If both types
+-- are the same, call `handleReload`. Otherwise, use the new default.
+handleReloadTy :: (LayoutClass l a, Read (l a)) => Layout a -> l a -> l a
+handleReloadTy (Layout old) newdef = handleReloadS (show old) newdef
+
+-- | `handleReload` wrapper for `show`ed layouts.
+handleReloadS :: (LayoutClass l a, Read (l a)) => String -> l a -> l a
+handleReloadS olds newdef =
+    case [(asTypeOf l newdef, s) | (l, s) <- reads olds]  of
+         [(lold, "")] -> handleReload lold newdef
+         _            -> newdef
+
 instance LayoutClass Layout Window where
     runLayout (Workspace i (Layout l) ms) r = fmap (fmap Layout) `fmap` runLayout (Workspace i l ms) r
-    doLayout (Layout l) r s  = fmap (fmap Layout) `fmap` doLayout l r s
-    emptyLayout (Layout l) r = fmap (fmap Layout) `fmap` emptyLayout l r
-    handleMessage (Layout l) = fmap (fmap Layout) . handleMessage l
-    description (Layout l)   = description l
+    doLayout (Layout l) r s   = fmap (fmap Layout) `fmap` doLayout l r s
+    emptyLayout (Layout l) r  = fmap (fmap Layout) `fmap` emptyLayout l r
+    handleMessage (Layout l)  = fmap (fmap Layout) . handleMessage l
+    description (Layout l)    = description l
+    handleReload o (Layout n) = Layout (handleReloadTy o n)
 
 instance Show (Layout a) where show (Layout l) = show l
 

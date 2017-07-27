@@ -481,7 +481,7 @@ readStateFile xmc = do
     return $ do
       sf <- join sf'
 
-      let winset = W.ensureTags layout (workspaces xmc) $ W.mapLayout (fromMaybe layout . maybeRead lreads) (sfWins sf)
+      let winset = W.ensureTags (Layout layout) (workspaces xmc) $ W.mapLayout (Layout . flip handleReloadS (layoutHook xmc)) (sfWins sf)
           extState = M.fromList . map (second Left) $ sfExt sf
 
       return XState { windowset       = winset
@@ -492,8 +492,7 @@ readStateFile xmc = do
                     , extensibleState = extState
                     }
   where
-    layout = Layout (layoutHook xmc)
-    lreads = readsLayout layout
+    layout = layoutHook xmc
     maybeRead reads' s = case reads' s of
                            [(x, "")] -> Just x
                            _         -> Nothing
